@@ -7,16 +7,26 @@ use crate::{
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use uuid::Uuid;
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Blockchain {
     pub blocks: Vec<Block>,
+    pub utxos: HashMap<Hash, TransactionOutput>,
 }
 
 impl Blockchain {
     pub fn new() -> Self {
-        Blockchain { blocks: vec![] }
+        Blockchain {
+            blocks: vec![],
+            utxos: HashMap::new(),
+        }
+    }
+
+    // block height
+    pub fn block_height(&self) -> u64 {
+        self.blocks.len() as u64
     }
 
     pub fn add_block(&mut self, block: Block) -> Result<()> {
@@ -55,13 +65,27 @@ impl Blockchain {
             }
 
             // verify all the transaction in the block
-            block.verify_transactions(self.block_height(), &self.utxos)?;
+            block.verify_transactions(&self.utxos)?;
         }
         self.blocks.push(block);
         Ok(())
     }
+
+    // rebuild UTXO set from the blockchain
+    pub fn rebuild_utxos(&mut self) {
+        for block in &self.blocks {
+            for transaction in &block.transactions {
+                for input in &transaction.inputs {
+                    self.utxos.remove(&input.prev_transaction_output_hash);
+                }
+                for output in transaction.outputs.iter() {
+                    self.utxos.insert(output.hash(), output.clone());
+                }
+            }
+        }
+    }
 }
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Block {
     pub header: BlockHeader,
     pub transactions: Vec<Transaction>,
@@ -77,6 +101,60 @@ impl Block {
 
     pub fn hash(&self) -> Hash {
         Hash::hash(self)
+    }
+
+
+    // verify all transactions in the block
+    pub fn verify_transactions(
+        &self,
+        utxos: &HashMap<Hash, TransactionOutput>,
+    ) -> Result<()> {
+        let mut inputs: HashMap<Hash, TransactionOutput> = HashMap::new();
+
+        // reject empty blocks
+        if self.transactions.is_empty() {
+            return Err(BtcError::InvalidBlock);
+        }
+
+        for transaction in &self.transactions {
+            let mut input_value = 0;
+            let mut output_value = 0;
+
+            for input in &transaction.inputs {
+                let prev_output = utxos.get(&input.prev_transaction_output_hash);
+                if prev_output.is_none() {
+                    return Err(BtcError::InvalidTransaction);
+                }
+
+                let prev_output = prev_output.unwrap();
+
+                // prevent same block double spending
+                if inputs.contains_key(&input.prev_transaction_output_hash) {
+                    return Err(BtcError::InvalidTransaction);
+                }
+
+                // check if signature is valid
+                if !input
+                    .signature
+                    .verify(&input.prev_transaction_output_hash, &prev_output.pubkey)
+                {
+                    return Err(BtcError::InvalidSignature);
+                }
+
+                input_value += prev_output.value;
+                inputs.insert(input.prev_transaction_output_hash, prev_output.clone());
+            }
+
+            for output in &transaction.outputs {
+               output_value += output.value;
+            }
+
+            if input_value < output_value {
+                return Err(BtcError::InvalidTransaction);
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -109,7 +187,7 @@ impl BlockHeader {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Transaction {
     pub inputs: Vec<TransactionInput>,
     pub outputs: Vec<TransactionOutput>,
@@ -124,7 +202,7 @@ impl Transaction {
         Hash::hash(self)
     }
 }
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct TransactionInput {
     pub prev_transaction_output_hash: Hash,
     signature: Signature,

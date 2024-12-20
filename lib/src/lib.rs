@@ -13,3 +13,9 @@ construct_uint! {
     #[derive(Serialize, Deserialize)]
     pub struct U256(4);
 }
+
+// initial reward in bitcoin - multiply by 10^8 to get satoshis
+pub const INITIAL_REWARD: u64 = 50;
+// halving interval in blocks
+pub const HALVING_INTERVAL: u64 = 210;
+// ideal block time in seconds
