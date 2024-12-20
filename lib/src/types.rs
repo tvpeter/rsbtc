@@ -103,10 +103,44 @@ impl Block {
         Hash::hash(self)
     }
 
+    pub fn verify_coinbase_transaction(
+        &self,
+        predicted_block_height: u64,
+        utxos: &HashMap<Hash, TransactionOutput>,
+    ) -> Result<()> {
+        // coinbase tx is the first tx in the block
+        let coinbase_transaction = &self.transactions[0];
+
+        if coinbase_transaction.inputs.len() != 0 {
+            return Err(BtcError::InvalidTransaction);
+        }
+
+        if coinbase_transaction.outputs.len() == 0 {
+            return Err(BtcError::InvalidTransaction);
+        }
+
+        let miner_fees = self.calculate_miner_fees(utxos)?;
+
+        let block_reward = crate::INITIAL_REWARD * 10u64.pow(8)
+            / 2u64.pow((predicted_block_height / crate::HALVING_INTERVAL) as u32);
+
+        let total_coinbase_outputs: u64 = coinbase_transaction
+            .outputs
+            .iter()
+            .map(|output| output.value)
+            .sum();
+
+        if total_coinbase_outputs != block_reward + miner_fees {
+            return Err(BtcError::InvalidTransaction);
+        }
+
+        Ok(())
+    }
 
     // verify all transactions in the block
     pub fn verify_transactions(
         &self,
+        predicted_block_height: u64,
         utxos: &HashMap<Hash, TransactionOutput>,
     ) -> Result<()> {
         let mut inputs: HashMap<Hash, TransactionOutput> = HashMap::new();
@@ -115,6 +149,9 @@ impl Block {
         if self.transactions.is_empty() {
             return Err(BtcError::InvalidBlock);
         }
+
+        // verify coinbase transaction
+        self.verify_coinbase_transaction(predicted_block_height, utxos)?;
 
         for transaction in &self.transactions {
             let mut input_value = 0;
@@ -146,7 +183,7 @@ impl Block {
             }
 
             for output in &transaction.outputs {
-               output_value += output.value;
+                output_value += output.value;
             }
 
             if input_value < output_value {

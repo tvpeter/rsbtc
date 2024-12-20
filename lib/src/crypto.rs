@@ -1,6 +1,6 @@
 use crate::sha256::Hash;
-use ecdsa::signature::Verifier;
 use ecdsa::signature::Signer;
+use ecdsa::signature::Verifier;
 use ecdsa::{Signature as ECDSASignature, SigningKey, VerifyingKey};
 use k256::Secp256k1;
 use serde::{Deserialize, Serialize};
