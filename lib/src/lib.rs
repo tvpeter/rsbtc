@@ -2,6 +2,8 @@ pub mod crypto;
 pub mod sha256;
 pub mod types;
 pub mod util;
+pub mod error;
+
 
 use serde::{Deserialize, Serialize};
 use uint::construct_uint;
