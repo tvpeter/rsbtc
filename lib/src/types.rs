@@ -1,3 +1,4 @@
+use crate::error::{BtcError, Result};
 use crate::{
     crypto::{PublicKey, Signature},
     sha256::Hash,
@@ -18,8 +19,46 @@ impl Blockchain {
         Blockchain { blocks: vec![] }
     }
 
-    pub fn add_block(&mut self, block: Block) {
+    pub fn add_block(&mut self, block: Block) -> Result<()> {
+        if self.blocks.is_empty() {
+            // if this is the first block, check the prev_block_hash is all zeroes
+            if block.header.prev_block_hash != Hash::zero() {
+                println!("zero hash");
+                return Err(BtcError::InvalidBlock);
+            }
+        } else {
+            // if this is not the first block, check if the prev_block_hash is the hash of the last
+            // block
+            let last_block = self.blocks.last().unwrap();
+
+            if block.header.prev_block_hash != last_block.hash() {
+                println!("previous block has is wrong");
+                return Err(BtcError::InvalidBlock);
+            }
+
+            // check if the block's has is less than the target
+            if !block.header.hash().matches_target(block.header.target) {
+                println!("block has does not match target");
+                return Err(BtcError::InvalidBlock);
+            }
+
+            // check if the merkle root is correct
+            let calculated_merkle_root = MerkleRoot::calculate(&block.transactions);
+            if calculated_merkle_root != block.header.merkle_root {
+                println!("invalid merkle root");
+                return Err(BtcError::InvalidMerkleRoot);
+            }
+
+            // check if the block's timestamp is after the last blocks' timestamp
+            if block.header.timestamp <= last_block.header.timestamp {
+                return Err(BtcError::InvalidBlock);
+            }
+
+            // verify all the transaction in the block
+            block.verify_transactions(self.block_height(), &self.utxos)?;
+        }
         self.blocks.push(block);
+        Ok(())
     }
 }
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -36,8 +75,8 @@ impl Block {
         }
     }
 
-    pub fn hash() -> ! {
-        unimplemented!()
+    pub fn hash(&self) -> Hash {
+        Hash::hash(self)
     }
 }
 
@@ -65,8 +104,8 @@ impl BlockHeader {
             target,
         }
     }
-    pub fn hash() -> ! {
-        unimplemented!()
+    pub fn hash(&self) -> Hash {
+        Hash::hash(self)
     }
 }
 
@@ -81,8 +120,8 @@ impl Transaction {
         Transaction { inputs, outputs }
     }
 
-    pub fn hash(&self) -> ! {
-        unimplemented!()
+    pub fn hash(&self) -> Hash {
+        Hash::hash(self)
     }
 }
 #[derive(Serialize, Deserialize, Clone, Debug)]

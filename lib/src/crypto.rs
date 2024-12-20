@@ -2,13 +2,13 @@ use ecdsa::{signature::Signer, Signature as ECDSASignature, SigningKey, Verifyin
 use k256::Secp256k1;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Signature(ECDSASignature<Secp256k1>);
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PublicKey(VerifyingKey<Secp256k1>);
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct PrivateKey(#[serde(with = "signkey_serde")] pub SigningKey<Secp256k1>);
 
 mod signkey_serde {
