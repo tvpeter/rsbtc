@@ -65,7 +65,7 @@ impl Blockchain {
             }
 
             // verify all the transaction in the block
-            block.verify_transactions(&self.utxos)?;
+            block.verify_transactions(self.block_height(), &self.utxos)?;
         }
         self.blocks.push(block);
         Ok(())
@@ -103,6 +103,41 @@ impl Block {
         Hash::hash(self)
     }
 
+    pub fn calculate_miner_fees(&self, utxos: &HashMap<Hash, TransactionOutput>) -> Result<u64> {
+        let mut inputs: HashMap<Hash, TransactionOutput> = HashMap::new();
+        let mut outputs: HashMap<Hash, TransactionOutput> = HashMap::new();
+
+        //check every transaction after coinbase
+        for transaction in self.transactions.iter().skip(1) {
+            for input in &transaction.inputs {
+                //inputs doesnt contain the output values, so we have to match inputs to outputs
+                let prev_output = utxos.get(&input.prev_transaction_output_hash);
+                if prev_output.is_none() {
+                    return Err(BtcError::InvalidTransaction);
+                }
+
+                let prev_output = prev_output.unwrap();
+
+                if inputs.contains_key(&input.prev_transaction_output_hash) {
+                    return Err(BtcError::InvalidTransaction);
+                }
+
+                inputs.insert(input.prev_transaction_output_hash, prev_output.clone());
+            }
+
+            for output in &transaction.outputs {
+                if outputs.contains_key(&output.hash()) {
+                    return Err(BtcError::InvalidTransaction);
+                }
+                outputs.insert(output.hash(), output.clone());
+            }
+        }
+
+        let input_value: u64 = inputs.values().map(|output| output.value).sum();
+        let output_value: u64 = outputs.values().map(|output| output.value).sum();
+        Ok(input_value - output_value)
+    }
+
     pub fn verify_coinbase_transaction(
         &self,
         predicted_block_height: u64,
@@ -111,11 +146,11 @@ impl Block {
         // coinbase tx is the first tx in the block
         let coinbase_transaction = &self.transactions[0];
 
-        if coinbase_transaction.inputs.len() != 0 {
+        if !coinbase_transaction.inputs.is_empty() {
             return Err(BtcError::InvalidTransaction);
         }
 
-        if coinbase_transaction.outputs.len() == 0 {
+        if coinbase_transaction.outputs.is_empty() {
             return Err(BtcError::InvalidTransaction);
         }
 
