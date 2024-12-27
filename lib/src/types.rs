@@ -5,15 +5,19 @@ use crate::{
     util::MerkleRoot,
     U256,
 };
+use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Blockchain {
     pub blocks: Vec<Block>,
     pub utxos: HashMap<Hash, TransactionOutput>,
+    pub target: U256,
+    #[serde(default, skip_serializing)]
+    pub mempool: Vec<(DateTime<Utc>, Transaction)>,
 }
 
 impl Blockchain {
@@ -21,6 +25,8 @@ impl Blockchain {
         Blockchain {
             blocks: vec![],
             utxos: HashMap::new(),
+            target: crate::MIN_TARGET,
+            mempool: vec![],
         }
     }
 
@@ -67,7 +73,13 @@ impl Blockchain {
             // verify all the transaction in the block
             block.verify_transactions(self.block_height(), &self.utxos)?;
         }
+        // remove the transaction from mempool that is now in the block
+        let block_transactions: HashSet<_> =
+            block.transactions.iter().map(|tx| tx.hash()).collect();
+        self.mempool
+            .retain(|(_, tx)| !block_transactions.contains(&tx.hash()));
         self.blocks.push(block);
+        self.try_adjust_target();
         Ok(())
     }
 
@@ -83,6 +95,41 @@ impl Blockchain {
                 }
             }
         }
+    }
+
+    pub fn try_adjust_target(&mut self) {
+        if self.blocks.is_empty() {
+            return;
+        }
+        if self.blocks.len() % crate::DIFFICULTY_UPDATE_INTERVAL as usize != 0 {
+            return;
+        }
+        let start_time = self.blocks
+            [self.blocks.len() - crate::DIFFICULTY_UPDATE_INTERVAL as usize]
+            .header
+            .timestamp;
+        let end_time = self.blocks.last().unwrap().header.timestamp;
+        let time_diff = end_time - start_time;
+        let time_diff_seconds = time_diff.num_seconds();
+        let target_seconds = crate::IDEAL_BLOCK_TIME * crate::DIFFICULTY_UPDATE_INTERVAL;
+        let new_target = BigDecimal::parse_bytes(self.target.to_string().as_bytes(), 10)
+            .expect("Bug impossible")
+            * (BigDecimal::from(time_diff_seconds) / BigDecimal::from(target_seconds));
+        let new_target_str = new_target
+            .to_string()
+            .split('.')
+            .next()
+            .expect("Bug: expected a decimal point")
+            .to_owned();
+        let new_target = U256::from_str_radix(&new_target_str, 10).expect("BUG: impossible");
+        let new_target = if new_target < self.target / 4 {
+            self.target / 4
+        } else if new_target > self.target * 4 {
+            self.target * 4
+        } else {
+            new_target
+        };
+        self.target = new_target.min(crate::MIN_TARGET);
     }
 }
 #[derive(Serialize, Deserialize, Clone)]
