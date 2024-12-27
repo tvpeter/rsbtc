@@ -13,11 +13,11 @@ use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Blockchain {
-    pub blocks: Vec<Block>,
-    pub utxos: HashMap<Hash, TransactionOutput>,
-    pub target: U256,
+    blocks: Vec<Block>,
+    utxos: HashMap<Hash, TransactionOutput>,
+    target: U256,
     #[serde(default, skip_serializing)]
-    pub mempool: Vec<(DateTime<Utc>, Transaction)>,
+    mempool: Vec<(DateTime<Utc>, Transaction)>,
 }
 
 impl Blockchain {
@@ -30,6 +30,17 @@ impl Blockchain {
         }
     }
 
+    pub fn utxos(&self) -> &HashMap<Hash, TransactionOutput> {
+        &self.utxos
+    }
+
+    pub fn target(&self) -> U256 {
+        self.target
+    }
+
+    pub fn blocks(&self) -> impl Iterator<Item = &Block> {
+        self.blocks.iter()
+    }
     // block height
     pub fn block_height(&self) -> u64 {
         self.blocks.len() as u64
