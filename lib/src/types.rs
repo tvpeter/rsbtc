@@ -9,7 +9,6 @@ use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::io::SeekFrom;
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -18,7 +17,7 @@ pub struct Blockchain {
     utxos: HashMap<Hash, (bool, TransactionOutput)>,
     target: U256,
     #[serde(default, skip_serializing)]
-    mempool: Vec<Transaction>,
+    mempool: Vec<(DateTime<Utc>, Transaction)>,
 }
 
 impl Blockchain {
@@ -47,7 +46,7 @@ impl Blockchain {
         self.blocks.len() as u64
     }
 
-    pub fn mempool(&self) -> &[Transaction] {
+    pub fn mempool(&self) -> &[(DateTime<Utc>, Transaction)] {
         &self.mempool
     }
 
@@ -93,7 +92,7 @@ impl Blockchain {
         let block_transactions: HashSet<_> =
             block.transactions.iter().map(|tx| tx.hash()).collect();
         self.mempool
-            .retain(|(tx)| !block_transactions.contains(&tx.hash()));
+            .retain(|(_, tx)| !block_transactions.contains(&tx.hash()));
         self.blocks.push(block);
         self.try_adjust_target();
         Ok(())
@@ -164,6 +163,48 @@ impl Blockchain {
             known_inputs.insert(input.prev_transaction_output_hash);
         }
 
+        /*
+         * check if any of the UTXOs have the bool set to true and if so,
+         * find the transaction that references them in mempool,
+         * remove it, and set all the utxos it references to false
+         */
+        for input in &transaction.inputs {
+            if let Some((true, _)) = self.utxos.get(&input.prev_transaction_output_hash) {
+                // find the transaction that references the UTXO we are trying to reference
+                let referencing_transaction =
+                    self.mempool
+                        .iter()
+                        .enumerate()
+                        .find(|(_, (_, transaction))| {
+                            transaction
+                                .outputs
+                                .iter()
+                                .any(|output| output.hash() == input.prev_transaction_output_hash)
+                        });
+
+                // if there is any, unmark all its utxos
+                if let Some((idx, (_, referencing_transaction))) = referencing_transaction {
+                    for input in &referencing_transaction.inputs {
+                        // set all utxos in this tx to false
+                        self.utxos
+                            .entry(input.prev_transaction_output_hash)
+                            .and_modify(|(marked, _)| {
+                                *marked = false;
+                            });
+                    }
+                    // remove the transaction from mempool
+                    self.mempool.remove(idx);
+                } else {
+                    // if there is no matching tx, set this utxo to false
+                    self.utxos
+                        .entry(input.prev_transaction_output_hash)
+                        .and_modify(|(marked, _)| {
+                            *marked = false;
+                        });
+                }
+            }
+        }
+
         // all inputs must be lower than all outputs
         let all_inputs = transaction
             .inputs
@@ -187,10 +228,19 @@ impl Blockchain {
             return Err(BtcError::InvalidTransaction);
         }
 
-        self.mempool.push(transaction);
+        // mark the utxos as used
+        for input in &transaction.inputs {
+            self.utxos
+                .entry(input.prev_transaction_output_hash)
+                .and_modify(|(marked, _)| {
+                    *marked = true;
+                });
+        }
+
+        self.mempool.push((Utc::now(), transaction));
 
         //sort by miner fee
-        self.mempool.sort_by_key(|transaction| {
+        self.mempool.sort_by_key(|(_, transaction)| {
             let all_inputs = transaction
                 .inputs
                 .iter()
