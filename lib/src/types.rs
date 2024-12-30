@@ -261,6 +261,36 @@ impl Blockchain {
         });
         Ok(())
     }
+
+    //remove transactions older than max_mempool_age
+    pub fn cleanup_mempool(&mut self) {
+        let now = Utc::now();
+        let mut utxo_hashes_to_unmark: Vec<Hash> = vec![];
+
+        self.mempool.retain(|(timestamp, transaction)| {
+            if now - *timestamp
+                > chrono::Duration::seconds(crate::MAX_MEMPOOL_TRANSACTION_AGE as i64)
+            {
+                //push all utxos to unmark to the vec so we can unmark them later
+                utxo_hashes_to_unmark.extend(
+                    transaction
+                        .inputs
+                        .iter()
+                        .map(|input| input.prev_transaction_output_hash),
+                );
+                false
+            } else {
+                true
+            }
+        });
+
+        // unmark all of the utxos
+        for hash in utxo_hashes_to_unmark {
+            self.utxos.entry(hash).and_modify(|(marked, _)| {
+                *marked = false;
+            });
+        }
+    }
 }
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Block {
