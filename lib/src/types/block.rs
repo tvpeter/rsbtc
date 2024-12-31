@@ -10,7 +10,7 @@ use crate::{
     U256,
 };
 
-use super::{Transaction, TransactionOutput};
+use super::transaction::{Transaction, TransactionOutput};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Block {
