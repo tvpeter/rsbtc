@@ -15,7 +15,7 @@ use crate::{
 
 use super::transaction::{Transaction, TransactionOutput};
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Block {
     pub header: BlockHeader,
     pub transactions: Vec<Transaction>,

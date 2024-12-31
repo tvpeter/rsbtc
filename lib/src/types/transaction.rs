@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::io::{Error as IoError, ErrorKind, Read, Result as IoResult, Write};
 use uuid::Uuid;
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Transaction {
     pub inputs: Vec<TransactionInput>,
     pub outputs: Vec<TransactionOutput>,
@@ -33,7 +33,7 @@ impl Saveable for Transaction {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TransactionInput {
     pub prev_transaction_output_hash: Hash,
     pub signature: Signature,
