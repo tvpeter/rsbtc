@@ -1,20 +1,15 @@
 use crate::error::{BtcError, Result};
-use crate::{
-    crypto::{PublicKey, Signature},
-    sha256::Hash,
-    util::MerkleRoot,
-    U256,
-};
+use crate::{sha256::Hash, util::MerkleRoot, U256};
 use bigdecimal::BigDecimal;
 use block::Block;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use uuid::Uuid;
+use transaction::{Transaction, TransactionOutput};
 
 mod block;
 mod blockchain;
-mod transaction;
+pub mod transaction;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Blockchain {
@@ -295,39 +290,5 @@ impl Blockchain {
                 *marked = false;
             });
         }
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct Transaction {
-    pub inputs: Vec<TransactionInput>,
-    pub outputs: Vec<TransactionOutput>,
-}
-
-impl Transaction {
-    pub fn new(inputs: Vec<TransactionInput>, outputs: Vec<TransactionOutput>) -> Self {
-        Transaction { inputs, outputs }
-    }
-
-    pub fn hash(&self) -> Hash {
-        Hash::hash(self)
-    }
-}
-#[derive(Serialize, Deserialize, Clone)]
-pub struct TransactionInput {
-    pub prev_transaction_output_hash: Hash,
-    signature: Signature,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct TransactionOutput {
-    pub value: u64,
-    pub unique_id: Uuid,
-    pub pubkey: PublicKey,
-}
-
-impl TransactionOutput {
-    pub fn hash(&self) -> Hash {
-        Hash::hash(self)
     }
 }
