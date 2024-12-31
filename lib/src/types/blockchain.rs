@@ -1,4 +1,7 @@
-use std::{collections::{HashMap, HashSet}, io::{Error as IoError, ErrorKind as IoErrorKind, Read, Result as IoResult, Write}};
+use std::{
+    collections::{HashMap, HashSet},
+    io::{Error as IoError, ErrorKind as IoErrorKind, Read, Result as IoResult, Write},
+};
 
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
@@ -300,14 +303,12 @@ impl Blockchain {
 
 impl Saveable for Blockchain {
     fn load<I: Read>(reader: I) -> IoResult<Self> {
-        ciborium::de::from_reader(reader).map_err(|_|{
-            IoError::new(IoErrorKind::InvalidData, "Failed to deserialize blockchain")
-        })
+        ciborium::de::from_reader(reader)
+            .map_err(|_| IoError::new(IoErrorKind::InvalidData, "Failed to deserialize blockchain"))
     }
 
     fn save<O: Write>(&self, writer: O) -> IoResult<()> {
-        ciborium::ser::into_writer(self, writer).map_err(|_|{
-            IoError::new(IoErrorKind::InvalidData, "failed to serialize blockchain")
-        })
+        ciborium::ser::into_writer(self, writer)
+            .map_err(|_| IoError::new(IoErrorKind::InvalidData, "failed to serialize blockchain"))
     }
 }
