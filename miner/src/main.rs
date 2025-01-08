@@ -1,35 +1,31 @@
-use std::{env, process::exit, usize};
+use std::{env, process::exit};
 
-use btc_lib::{types::Block, util::Saveable};
+use btc_lib::{crypto::PublicKey, util::Saveable};
 
-fn main() {
-    // parse block path and the steps count from the first and
-    // second argument
-    let (path, steps) = if let (Some(arg), Some(arg2)) = (env::args().nth(1), env::args().nth(2)) {
-        (arg, arg2)
-    } else {
-        eprintln!("usage: miner <block_file> <steps>");
+fn usage() -> ! {
+    eprintln!(
+        "Usage: {} <address> <public_key_file>",
+        env::args().next().unwrap()
+    );
+    exit(1);
+}
+
+#[tokio::main]
+async fn main() {
+    let address = match env::args().nth(1) {
+        Some(address) => address,
+        None => usage(),
+    };
+
+    let public_key_file = match env::args().nth(2) {
+        Some(public_key_file) => public_key_file,
+        None => usage(),
+    };
+
+    let Ok(public_key) = PublicKey::load_from_file(&public_key_file) else {
+        eprintln!("Error reading public key from file {}", public_key_file);
         exit(1);
     };
 
-    let steps = if let Ok(s @ 1..=usize::MAX) = steps.parse() {
-        s
-    } else {
-        eprintln!("<steps> should be a positive integer");
-        exit(1);
-    };
-
-    // load block from file
-    let og_block = Block::load_from_file(path).expect("failed to load block");
-    let mut block = og_block.clone();
-
-    while !block.header.mine(steps) {
-        println!("mining...");
-    }
-
-    println!("original: {:#?}", og_block);
-    println!("hash: {}", og_block.header.hash());
-    //mined block
-    println!("final: {:#?}", block);
-    println!("hash: {}", block.header.hash());
+    println!("Connecting to {address} to mine with {public_key:?}")
 }

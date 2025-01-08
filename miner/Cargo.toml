@@ -6,3 +6,4 @@ edition = "2021"
 [dependencies]
 
 btc_lib = { path = "../lib"}
+tokio = { version = "1.42.0", features = ["full"] }
