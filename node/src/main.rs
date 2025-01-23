@@ -1,4 +1,4 @@
-use anyhow::{Ok, Result};
+use anyhow::{Context, Ok, Result};
 use argh::FromArgs;
 use btc_lib::network::Message;
 use btc_lib::types::Blockchain;
@@ -65,7 +65,45 @@ pub async fn populate_connections(nodes: &[String]) -> Result<()> {
     Ok(())
 }
 
+pub async fn find_longest_chain_node() -> Result<(String, u32)> {
+    println!("finding nodes with the highest blockchain length..");
+
+    let mut longest_name = String::new();
+    let mut longest_count = 0;
+    let all_nodes = crate::NODES
+        .iter()
+        .map(|x| x.key().clone())
+        .collect::<Vec<_>>();
+
+    for node in all_nodes {
+        println!("asking {} for blockchain length", node);
+
+        let mut stream = crate::NODES.get_mut(&node).context("no node")?;
+        let message = Message::AskDifference(0);
+        message.send_async(&mut *stream).await.unwrap();
+        println!("sent AskDifference to {}", node);
+        let message = Message::receive_async(&mut *stream).await?;
+
+        match message {
+            Message::Difference(count) => {
+                println!("received Difference from {}", node);
+                if count > longest_count {
+                    println!("new longest blockchain {} blocks from {node}", count);
+                    longest_count = count;
+                    longest_name = node;
+                }
+            }
+            e => {
+                println!("unexpected message from {} : {:?}", node, e);
+            }
+        }
+    }
+    Ok((longest_name, longest_count as u32))
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
+    // parse command line arguments
+
     Ok(())
 }
