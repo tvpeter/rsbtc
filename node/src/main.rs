@@ -123,5 +123,38 @@ pub async fn download_blockchain(node: &str, count: u32) -> Result<()> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // parse command line arguments
+    let args: Args = argh::from_env();
+    let port = args.port;
+    let blockchain_file = args.blockchain_file;
+    let nodes = args.nodes;
+
+    if Path::new(&blockchain_file).exists() {
+        util::load_blockchain(&blockchain_file);
+    } else {
+        println!("blockchain file does not exist");
+        populate_connections(&nodes).await?;
+        println!("total number of nodes known: {}", NODES.len());
+        if nodes.is_empty() {
+            println!("no initial nodes provided, starting as a seed node ");
+        } else {
+            let (longest_name, longest_count) = find_longest_chain_node().await?;
+            // request the blockchain from the node with the longest chain
+            download_blockchain(&longest_name, longest_count).await?;
+            println!("blockchain download from {}", longest_name);
+
+            // recalculate utxos
+            {
+                let mut blockchain = BLOCKCHAIN.write().await;
+                blockchain.rebuild_utxos();
+            }
+
+            // try to adjust difficulty
+            {
+                let mut blockchain = BLOCKCHAIN.write().await;
+                blockchain.try_adjust_target();
+            }
+        }
+    }
     Ok(())
 }
