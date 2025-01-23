@@ -2,7 +2,7 @@ use std::env;
 
 use btc_lib::{crypto::PrivateKey, util::Saveable};
 
-fn main (){
+fn main() {
     let name = env::args().nth(1).expect("please provide a name");
 
     let private_key = PrivateKey::new_key();
